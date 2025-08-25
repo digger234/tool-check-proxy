@@ -1,0 +1,35 @@
+{
+    "max_threads": 2000,
+    "timeout": 1,
+    "preferred_countries": [
+        "US",
+        "UK",
+        "DE",
+        "FR"
+    ],
+    "min_speed_mbps": 0.5,
+    "use_rich_interface": true,
+    "auto_save_results": true,
+    "check_proxy_speed": true,
+    "blacklist_countries": [
+        "CN",
+        "RU"
+    ],
+    "retry_failed_proxies": true,
+    "max_retries": 2,
+    "min_health_score": 60,
+    "max_response_time": 1000,
+    "preferred_anonymity": [
+        "Elite",
+        "Anonymous"
+    ],
+    "exclude_hosting": false,
+    "min_uptime_percentage": 80,
+    "enable_smart_threading": true,
+    "enable_geolocation": true,
+    "enable_health_scoring": true,
+    "enable_advanced_filtering": true,
+    "auto_export_reports": true,
+    "auto_bookmark_quality": true,
+    "rate_limit_requests_per_second": 15
+}
