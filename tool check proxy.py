@@ -2,6 +2,9 @@ import sys
 import subprocess
 import pkg_resources
 
+# Import Rich first
+from rich.console import Console
+
 def check_and_install_dependencies():
     required_packages = {
         'httpx': 'httpx',
@@ -11,6 +14,7 @@ def check_and_install_dependencies():
         'psutil': 'psutil'
     }
     
+    console = Console()
     installed_packages = {pkg.key for pkg in pkg_resources.working_set}
     missing_packages = [pkg for pkg, import_name in required_packages.items() 
                        if pkg not in installed_packages]
@@ -189,15 +193,7 @@ def get_yes_no_input(message):
         else:
             console.print(f"[red]Vui lòng trả lời 'y' (có) hoặc 'n' (không)![/red]")
 
-def load_config():
-    config_path = os.path.join(get_current_directory(), 'proxy_config.json')
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            return get_default_config()
-    return get_default_config()
+
 
 def get_default_config():
     return {
@@ -219,7 +215,7 @@ def get_default_config():
     }
 
 def save_config(config):
-    config_path = os.path.join(get_current_directory(), 'proxy_config.json')
+    config_path = os.path.join(get_current_directory(), 'config.json')
     try:
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4)
@@ -408,15 +404,6 @@ class ProxyRotator:
         self.current_index = (self.current_index + 1) % len(self.working_proxies)
         return proxy
 
-async def ping_host(host):
-    try:
-        start_time = time.time()
-        async with httpx.AsyncClient() as client:
-            await client.head(f'http://{host}', timeout=5)
-        return (time.time() - start_time) * 1000
-    except:
-        return None
-
 async def check_proxy_protocols(proxy_url):
     protocols = []
     for protocol in ['http', 'https', 'socks4', 'socks5']:
@@ -494,30 +481,6 @@ def check_and_install_dependencies():
                 sys.exit(1)
             
     console.print("[green]All dependencies are installed![/green]")
-
-    for lib in required_libraries:
-        try:
-            __import__(lib)
-        except ImportError:
-            missing_libraries.append(lib)
-
-    if missing_libraries:
-        console.print(f"\n[red]✗ Thiếu thư viện: {', '.join(missing_libraries)}[/red]")
-        console.print(f"[yellow]◆ Đang cài đặt thư viện thiếu...[/yellow]")
-        time.sleep(1)
-        for lib in missing_libraries:
-            try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
-                console.print(f"[green]✓ Đã cài đặt thành công: {lib}[/green]")
-            except subprocess.CalledProcessError:
-                console.print(f"[red]✗ Lỗi cài đặt: {lib}. Vui lòng cài thủ công với 'pip install {lib}'[/red]")
-                console.input(f"\n[cyan]Nhấn Enter để thoát...[/cyan]")
-                sys.exit(1)
-        console.print(f"\n[green]✓ Tất cả thư viện đã được cài đặt thành công![/green]")
-        time.sleep(1)
-    else:
-        console.print(f"\n[green]✓ Tất cả thư viện đã sẵn sàng![/green]")
-        time.sleep(1)
 
 def select_proxy_file():
     root = Tk()
@@ -3565,18 +3528,6 @@ async def handle_proxy_collection(proxy_manager):
         console.print(f"\n[green]Đã lưu danh sách proxy vào:[/green] [white]{save_path}[/white]")
         console.input("\n[cyan]Nhấn Enter để quay lại menu chính...[/cyan]")
 
-    if live_count > 0:
-        console.print(f"\n[green]✓ KIỂM TRA HOÀN TẤT![/green]")
-        console.print(f"[cyan]Tổng proxy:[/cyan] [white]{len(proxies):,}[/white]")
-        console.print(f"[cyan]Proxy sống:[/cyan] [white]{live_count:,}[/white]")
-        console.print(f"[cyan]Proxy chết:[/cyan] [white]{len(proxies) - live_count:,}[/white]")
-        console.print(f"[cyan]Kết quả lưu tại:[/cyan] [white]{output_path}[/white]")
-    else:
-        console.print(f"\n[red]✓ KIỂM TRA HOÀN TẤT![/red]")
-        console.print(f"[cyan]Tổng proxy:[/cyan] [white]{len(proxies):,}[/white]")
-        console.print(f"[cyan]Proxy sống:[/cyan] [white]{live_count:,}[/white]")
-        console.print(f"[cyan]Proxy chết:[/cyan] [white]{len(proxies) - live_count:,}[/white]")
-
 def run_proxy_check(proxy_file, settings):
     console.print(f"\n[yellow]Đang kiểm tra proxy với {settings['max_threads']} luồng...\n[/yellow]")
 
@@ -3606,7 +3557,31 @@ def run_proxy_check(proxy_file, settings):
         console.print(f"[cyan]Proxy sống:[/cyan] [white]{live_count:,}[/white]")
         console.print(f"[cyan]Proxy chết:[/cyan] [white]{len(proxies) - live_count:,}[/white]")
 
+def run_proxy_check_from_memory(proxy_list, settings):
+    console.print(f"\n[yellow]Đang kiểm tra proxy với {settings['max_threads']} luồng...\n[/yellow]")
 
+    output_path = os.path.join(get_current_directory(), settings['output_file'])
+
+    results = check_proxies(
+        proxy_list,
+        settings['classify'],
+        settings.get('classify_option', 'n'),
+        output_path,
+        settings['max_threads']
+    )
+    live_count = len(results)
+
+    if live_count > 0:
+        console.print(f"\n[green]✓ KIỂM TRA HOÀN TẤT![/green]")
+        console.print(f"[cyan]Tổng proxy:[/cyan] [white]{len(proxy_list):,}[/white]")
+        console.print(f"[cyan]Proxy sống:[/cyan] [white]{live_count:,}[/white]")
+        console.print(f"[cyan]Proxy chết:[/cyan] [white]{len(proxy_list) - live_count:,}[/white]")
+        console.print(f"[cyan]Kết quả lưu tại:[/cyan] [white]{output_path}[/white]")
+    else:
+        console.print(f"\n[red]✓ KIỂM TRA HOÀN TẤT![/red]")
+        console.print(f"[cyan]Tổng proxy:[/cyan] [white]{len(proxy_list):,}[/white]")
+        console.print(f"[cyan]Proxy sống:[/cyan] [white]{live_count:,}[/white]")
+        console.print(f"[cyan]Proxy chết:[/cyan] [white]{len(proxy_list) - live_count:,}[/white]")
 
 def proceed_with_check_rich(source_type, proxy_file=None, proxy_list=None, user_settings=None):
     config_title = create_rainbow_text("◆ CẤU HÌNH XÁC THỰC ◆")
@@ -3713,13 +3688,16 @@ async def main():
         clear_screen()
         show_header()
 
-        welcome_text = create_rainbow_text("◆◆◆ CHÀO MỪNG ĐẾN VỚI PROXY MASTER SUITE ◆◆◆")
+        config = load_config()
+        
+        if config.get('use_rich_interface', True):
+            welcome_text = create_rainbow_text("◆◆◆ CHÀO MỪNG ĐẾN VỚI PROXY MASTER SUITE ◆◆◆")
 
-         rainbow_line = create_rainbow_text("─" * 140)
+            rainbow_line = create_rainbow_text("─" * 140)
 
             menu_items = [
                 [Text("【 1 】", style="bold red on black"), "🔍", Text("Kiểm tra và phân tích proxy", style="bold bright_green")],
-                [Text("【 2 】", style="bold orange1 on black"), "�", Text("Thu thập proxy miễn phí", style="bold bright_blue")],
+                [Text("【 2 】", style="bold orange1 on black"), "📥", Text("Thu thập proxy miễn phí", style="bold bright_blue")],
                 [Text("【 3 】", style="bold yellow on black"), "⚙️", Text("Cấu hình hệ thống", style="bold bright_magenta")],
                 [Text("【 4 】", style="bold cyan on black"), "🚪", Text("Thoát chương trình", style="bold bright_red")]
             ]
@@ -3865,60 +3843,14 @@ async def main():
             else:
                 console.print("[red]Lựa chọn không hợp lệ![/red]")
                 await asyncio.sleep(1)
-                    input(f"\n{Fore.CYAN}Nhấn Enter để quay lại menu chính...{Style.RESET_ALL}")
-                    continue
-                
-                if not validate_proxy_file(proxy_file):
-                    input(f"\n{Fore.CYAN}Nhấn Enter để quay lại menu chính...{Style.RESET_ALL}")
-                    continue
-                
-                if config.get('use_rich_interface', True):
-                    proceed_with_check_rich('file', proxy_file=proxy_file, user_settings=user_settings)
-                else:
-                    proceed_with_check('file', proxy_file=proxy_file)
-
-            elif input_choice == '2':
-                proxy_list = await input_proxies_manually()
-                if not proxy_list:
-                    console.print("[yellow]Không có proxy nào được nhập![/yellow]")
-                    await asyncio.sleep(1)
-                    continue
-
-                try:
-                    results = await check_proxies(proxy_list, user_settings)
-                    display_results(results)
-                except Exception as e:
-                    console.print(f"[red]Lỗi khi kiểm tra proxy: {str(e)}[/red]")
-                finally:
-                    console.input("[cyan]Nhấn Enter để tiếp tục...[/cyan]")
-            
-            else:
-                console.print("[red]Lựa chọn không hợp lệ![/red]")
-                await asyncio.sleep(1)
-                continue
-            
-            input(f"\n{Fore.CYAN}Nhấn Enter để quay lại menu chính...{Style.RESET_ALL}")
 
         elif choice == '2':
-            try:
-                proxies = await get_free_proxies()
-                if proxies:
-                    console.print(f"[green]Đã tìm thấy {len(proxies)} proxy![/green]")
-                    save_path = os.path.join(os.path.dirname(__file__), 'free_proxies.txt')
-                    with open(save_path, 'w') as f:
-                        f.write('\n'.join(proxies))
-                    console.print(f"[green]Đã lưu proxy vào {save_path}[/green]")
-                else:
-                    console.print("[yellow]Không tìm thấy proxy nào![/yellow]")
-            except Exception as e:
-                console.print(f"[red]Lỗi khi tìm proxy: {str(e)}[/red]")
-            finally:
-                console.input("[cyan]Nhấn Enter để tiếp tục...[/cyan]")
+            await get_free_proxies_async()
                 
         elif choice == '3':
             try:
-                await show_config_menu()
-                config = await load_config()
+                show_config_menu()
+                config = load_config()
             except Exception as e:
                 console.print(f"[red]Lỗi khi cấu hình: {str(e)}[/red]")
                 await asyncio.sleep(1)
